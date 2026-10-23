@@ -74,6 +74,20 @@ class Spectrum:
     def phases(self) -> np.ndarray:
         return np.angle(self.edited)
 
+    # --- история правок ---
+    def snapshot(self):
+        return self.edited.copy(), self.enabled.copy()
+
+    def restore(self, snap) -> None:
+        self.edited, self.enabled = snap[0].copy(), snap[1].copy()
+
+    def edited_mask(self) -> np.ndarray:
+        """True там, где коэффициент изменён вручную относительно исходного."""
+        return self.edited != self.original
+
+    def coeff(self, k: int) -> complex:
+        return complex(self.edited[self.index_of(k)])
+
     def sorted_by_frequency(self):
         order = np.argsort(self.freqs)
         return self.freqs[order], self.edited[order]

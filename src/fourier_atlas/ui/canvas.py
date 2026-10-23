@@ -1,11 +1,11 @@
 """Виджет отрисовки эпициклов (QPainter). Вся математика — в animation/core."""
 from __future__ import annotations
 import numpy as np
-from PySide6.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import QPainter, QPen, QColor, QPolygonF, QBrush
 from PySide6.QtWidgets import QWidget
 
-from ..animation import AnimationController, Viewport
+from ..animation import AnimationController, Viewport, pick_harmonic
 
 BG = QColor(18, 20, 28)
 TARGET = QColor(120, 130, 160, 90)
@@ -19,6 +19,8 @@ def _poly(sx, sy) -> QPolygonF:
 
 
 class EpicycleCanvas(QWidget):
+    harmonic_menu_requested = Signal(int, object)      # k, глобальная позиция QPoint
+
     def __init__(self, controller: AnimationController, parent=None):
         super().__init__(parent)
         self.controller = controller
@@ -64,6 +66,12 @@ class EpicycleCanvas(QWidget):
 
     def mouseReleaseEvent(self, e):
         self._drag = None
+
+    def contextMenuEvent(self, e):
+        k = pick_harmonic(self.controller.frame(), self.controller.chain.freqs, self.view,
+                          e.pos().x(), e.pos().y())
+        if k is not None:
+            self.harmonic_menu_requested.emit(k, e.globalPos())
 
     def mouseDoubleClickEvent(self, e):
         self.fit_view()

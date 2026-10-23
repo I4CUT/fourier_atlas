@@ -4,7 +4,7 @@ import sys
 import numpy as np
 import pytest
 
-from fourier_atlas.animation import AnimationController, Viewport
+from fourier_atlas.animation import AnimationController, Viewport, pick_harmonic
 from fourier_atlas.core import reconstruct
 from fourier_atlas.data.samples import SAMPLES, make_sample
 
@@ -181,3 +181,25 @@ def test_animation_package_has_no_qt():
     src = os.path.join(os.path.dirname(__file__), "..", "src")
     assert subprocess.run([sys.executable, "-c", code],
                           env={**os.environ, "PYTHONPATH": src}).returncode == 0
+
+
+def test_pick_harmonic_circle_vector_miss_and_tiny():
+    z, spec, c = make("Эллипс", max_epicycles=6)
+    c.seek(0.2)
+    f = c.frame()
+    v = Viewport(900, 700)
+    v.fit(c.path)
+    jx, jy = v.to_screen(f.joints)
+    rpx = f.radii * v.scale
+    i = 1                                                    # самый крупный вращающийся эпицикл
+    assert rpx[i] > 20
+    # точка на окружности i (справа от центра) → её частота
+    k = pick_harmonic(f, c.chain.freqs, v, jx[i] + rpx[i], jy[i], tol=3)
+    assert k == int(c.chain.freqs[i])
+    # середина вектора i → тоже она
+    mx, my = (jx[i] + jx[i + 1]) / 2, (jy[i] + jy[i + 1]) / 2
+    assert pick_harmonic(f, c.chain.freqs, v, mx, my, tol=3) == int(c.chain.freqs[i])
+    # далеко от всего → None
+    assert pick_harmonic(f, c.chain.freqs, v, -500, -500) is None
+    # слишком мелкие окружности не выбираются
+    assert pick_harmonic(f, c.chain.freqs, v, jx[-1], jy[-1], tol=3, min_radius_px=1e9) is None

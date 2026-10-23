@@ -5,17 +5,24 @@ import time
 from dataclasses import replace
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (QComboBox, QCheckBox, QDockWidget, QFileDialog, QGroupBox, QHBoxLayout,
                                QLabel, QMainWindow, QMessageBox, QPushButton, QSlider, QSpinBox,
-                               QVBoxLayout, QWidget)
+                               QTabWidget, QVBoxLayout, QWidget)
 
+from ..analytics import SpectrumEditor
 from ..animation import AnimationController
 from ..core import reconstruct_at, rmse
 from ..data.catalog import Catalog
 from ..data.samples import contour_to_spectrum
 from ..geo import FILE_FILTER, GeoLoadError, PrepareOptions, load_file, prepare_region
 from .canvas import EpicycleCanvas
+from .analysis_panels import ComparePanel, ConvergencePanel
 from .formula_panel import FormulaPanel
+from .harmonic_menu import show_harmonic_menu
+from .hub import SpectrumHub
+from .spectrum_panel import SpectrumPanel
+from .table_panel import TablePanel
 from .workers import Worker, start
 
 log = logging.getLogger(__name__)
@@ -27,7 +34,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Fourier Atlas")
-        self.resize(1150, 880)
+        self.resize(1300, 960)
         self.opts = PrepareOptions()
         self.catalog = Catalog.from_defaults()
         self._workers: set[Worker] = set()
@@ -38,10 +45,24 @@ class MainWindow(QMainWindow):
         self.canvas = EpicycleCanvas(self.ctrl)
         self.canvas.set_target(self.z)
         self._build_panel()
+        self.editor = SpectrumEditor(self.ctrl, self.z)
+        self.hub = SpectrumHub(self.editor, self)
         self.formula = FormulaPanel(self.ctrl)
-        dock = QDockWidget("Ряд Фурье", self)
-        dock.setWidget(self.formula)
+        tabs = QTabWidget()
+        tabs.addTab(self.formula, "Ряд Фурье")
+        tabs.addTab(SpectrumPanel(self.hub), "Спектр")
+        tabs.addTab(TablePanel(self.hub), "Коэффициенты")
+        tabs.addTab(ConvergencePanel(self.hub), "Сходимость")
+        tabs.addTab(ComparePanel(self.hub), "Сравнение")
+        dock = QDockWidget("Анализ", self)
+        dock.setWidget(tabs)
+        dock.setMinimumHeight(330)
         self.addDockWidget(Qt.BottomDockWidgetArea, dock)
+        self.canvas.harmonic_menu_requested.connect(self._canvas_menu)
+        self.hub.changed.connect(self._after_change)
+        self.hub.replaced.connect(self._after_change)
+        QShortcut(QKeySequence("Ctrl+Z"), self, activated=self.editor.undo)
+        QShortcut(QKeySequence("Ctrl+Y"), self, activated=self.editor.redo)
 
         self._fill_combo(select=self.catalog.default_name())
         self._sync_part_spin()
@@ -72,11 +93,9 @@ class MainWindow(QMainWindow):
             self._error(str(e))
             return False
         self.current, self.prepared, self.z = region, prepared, z
-        self.ctrl.set_spectrum(spec)
         self.canvas.set_target(z)
+        self.editor.replace(z, spec)             # сигнал replaced: панели, формула, подписи
         self._sync_part_spin()
-        self._update_info()
-        self.formula.refresh()
         self.status.setText("")
         return True
 
@@ -226,10 +245,7 @@ class MainWindow(QMainWindow):
         self.canvas.update()
 
     def _on_vectors(self, v):
-        self.ctrl.max_epicycles = v
-        self._update_info()
-        self.formula.refresh()
-        self.canvas.update()
+        self.editor.set_max_epicycles(v)
 
     def _tick(self):
         now = time.perf_counter()
@@ -243,12 +259,27 @@ class MainWindow(QMainWindow):
         self.s_phase.setValue(int(self.ctrl.phase * 1000))
         self.s_phase.blockSignals(False)
 
+    def _canvas_menu(self, k, pos):
+        was_playing = self.ctrl.playing
+        self.ctrl.pause()                              # пока меню открыто, кадр не двигается
+        show_harmonic_menu(self, self.editor, [k], pos)
+        if was_playing:
+            self.ctrl.play()
+            self._last = time.perf_counter()
+
+    def _after_change(self):
+        self.formula.refresh()
+        self._update_info()
+        self.canvas.update()
+
     def _update_info(self):
         c = self.ctrl.chain
         t = np.arange(len(self.z)) / len(self.z)
         err = rmse(self.z, reconstruct_at(c.freqs, c.coeffs, t))
-        p = self.prepared
+        p, s = self.prepared, self.ctrl.spectrum
         rotating = int(np.count_nonzero(c.freqs != 0))
         self.info.setText(f"Эпициклов: {rotating}\nRMSE: {err:.5f}\n"
                           f"Часть {p.part_rank} из {p.n_parts}\n"
-                          f"Точек исходного контура: {p.raw_points}\nПроекция: {p.projection}")
+                          f"Точек исходного контура: {p.raw_points}\nПроекция: {p.projection}\n"
+                          f"Изменено коэффициентов: {int(s.edited_mask().sum())}\n"
+                          f"Отключено гармоник: {int((~s.enabled).sum())}")
