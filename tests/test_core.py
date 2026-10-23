@@ -170,6 +170,11 @@ def test_epicycle_tips_match_reconstruction_any_order():
     assert np.all(np.diff(chain.radii[1:]) <= 1e-15)    # после k=0 — по убыванию
     short = build_chain(s, max_vectors=2)
     assert len(short.freqs) == 2
+    rot = build_chain(s, max_rotating=2)
+    assert len(rot.freqs) == 3 and rot.freqs[0] == 0 and np.count_nonzero(rot.freqs) == 2
+    assert list(build_chain(s, max_rotating=0).freqs) == [0]
+    with pytest.raises(ValueError):
+        build_chain(s, max_rotating=-1)
 
 
 def test_joints_chain_is_cumulative():

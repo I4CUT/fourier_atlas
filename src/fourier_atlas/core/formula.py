@@ -103,6 +103,8 @@ def _signed_sum(parts: list[tuple[float, str]], d: int, const: float | None = No
 def complex_series(terms: list[Term], digits: int = 4, max_terms: int | None = None,
                    fmt: str = "text", wrap: int = 3) -> str:
     sel, rest = _select(terms, max_terms)
+    if not sel:
+        return "z(t) = 0" if fmt == "text" else "z(t) &= 0"
     if fmt == "text":
         parts = []
         for tm in sel:
@@ -118,6 +120,8 @@ def complex_series(terms: list[Term], digits: int = 4, max_terms: int | None = N
 def polar_series(terms: list[Term], digits: int = 4, max_terms: int | None = None,
                  fmt: str = "text", wrap: int = 3) -> str:
     sel, rest = _select(terms, max_terms)
+    if not sel:
+        return "z(t) = 0" if fmt == "text" else "z(t) &= 0"
     parts = []
     for tm in sel:
         r, phi = abs(tm.c), float(np.angle(tm.c))

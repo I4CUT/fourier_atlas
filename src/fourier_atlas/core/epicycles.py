@@ -25,13 +25,23 @@ class EpicycleChain:
         return ph @ self.coeffs
 
 
-def build_chain(spec: Spectrum, max_vectors: int | None = None) -> EpicycleChain:
-    """Включённые гармоники; k=0 первым, далее по убыванию амплитуды
-    (крупные круги первыми; сумма от порядка не зависит)."""
+def build_chain(spec: Spectrum, max_vectors: int | None = None,
+                max_rotating: int | None = None) -> EpicycleChain:
+    """Включённые гармоники; k=0 (центр) первым, далее по убыванию амплитуды
+    (крупные круги первыми; сумма от порядка не зависит).
+
+    max_rotating — число ВРАЩАЮЩИХСЯ эпициклов (k != 0); k=0 не вращается и
+    в это число не входит (0 → остаётся только центр). max_vectors — общий
+    предел длины цепочки вместе с k=0 (для совместимости)."""
     f, c = spec.active()
     order = np.lexsort((np.abs(f), -np.abs(c)))   # по убыванию |c|, при равенстве меньший |k|
-    zero = np.where(f[order] == 0)[0]
-    order = np.concatenate([order[zero], np.delete(order, zero)])
+    is_zero = f[order] == 0
+    rot = order[~is_zero]
+    if max_rotating is not None:
+        if max_rotating < 0:
+            raise ValueError("max_rotating >= 0")
+        rot = rot[:max_rotating]
+    order = np.concatenate([order[is_zero], rot])
     if max_vectors is not None:
         order = order[:max_vectors]
     return EpicycleChain(freqs=f[order].astype(float), coeffs=c[order], radii=np.abs(c[order]))

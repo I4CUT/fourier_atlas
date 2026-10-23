@@ -20,14 +20,15 @@ class Frame:
 
 
 class AnimationController:
-    def __init__(self, spectrum: Spectrum, max_vectors: int | None = None,
+    def __init__(self, spectrum: Spectrum, max_epicycles: int | None = None,
                  path_samples: int = 1024, trail_fraction: float = 1.0,
                  speed: float = 0.1):
         if path_samples < 8:
             raise ValueError("path_samples должно быть >= 8")
         self.spectrum = spectrum
         self.path_samples = int(path_samples)
-        self._max_vectors = max_vectors
+        self._max_epicycles = None
+        self._max_epicycles = self._check_n(max_epicycles)
         self._trail_fraction = 1.0
         self.trail_fraction = trail_fraction
         self.speed = float(speed)          # периодов в секунду, может быть < 0
@@ -42,15 +43,20 @@ class AnimationController:
     def phase(self) -> float:
         return self._phase
 
-    @property
-    def max_vectors(self):
-        return self._max_vectors
+    @staticmethod
+    def _check_n(value):
+        if value is not None and value < 0:
+            raise ValueError("max_epicycles >= 0")
+        return None if value is None else int(value)
 
-    @max_vectors.setter
-    def max_vectors(self, value):
-        if value is not None and value < 1:
-            raise ValueError("max_vectors >= 1")
-        self._max_vectors = value
+    @property
+    def max_epicycles(self):
+        """Число вращающихся эпициклов (None — все). 0 — только центр (k=0)."""
+        return self._max_epicycles
+
+    @max_epicycles.setter
+    def max_epicycles(self, value):
+        self._max_epicycles = self._check_n(value)
         self.refresh()
 
     @property
@@ -70,7 +76,7 @@ class AnimationController:
 
     def refresh(self) -> None:
         """Пересчитать цепочку и кэш траектории (вызывать после любых правок спектра)."""
-        self.chain = build_chain(self.spectrum, self._max_vectors)
+        self.chain = build_chain(self.spectrum, max_rotating=self._max_epicycles)
         ts = np.arange(self.path_samples) / self.path_samples
         self.path = reconstruct_at(self.chain.freqs, self.chain.coeffs, ts)
 

@@ -1,11 +1,10 @@
+# Этапы 1-3 (ядро, анимация, формулы, загрузка геоданных)
 numpy>=2.0
-scipy>=1.13
-shapely>=2.0
-geopandas>=1.0
-pyogrio>=0.9
 PySide6>=6.7
-pyqtgraph>=0.13
-imageio>=2.34
-imageio-ffmpeg>=0.5
 pytest>=8.0
-pyinstaller>=6.0
+# Следующие этапы (спектр/график, экспорт, сборка) — будут добавлены по мере реализации:
+# pyqtgraph>=0.13
+# matplotlib>=3.8
+# imageio>=2.34
+# imageio-ffmpeg>=0.5
+# pyinstaller>=6.0

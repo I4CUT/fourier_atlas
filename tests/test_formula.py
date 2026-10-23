@@ -104,3 +104,13 @@ def test_formula_follows_edits_and_mask():
     terms = terms_from_chain(build_chain(spec, 8))
     assert Term(1, 5 + 0j) in terms and all(t.k != -1 for t in terms)
     assert "(5.0000+0.0000*i)*exp(2*pi*i*t)" in complex_series(terms)
+
+
+def test_formula_for_empty_chain_and_center_only():
+    _, spec = make_sample("Эллипс", 256)
+    spec.set_enabled(0, False)
+    terms = terms_from_chain(build_chain(spec, max_rotating=0))
+    assert terms == []
+    assert complex_series(terms) == "z(t) = 0" and polar_series(terms) == "z(t) = 0"
+    assert real_series(terms).split("\n") == ["x(t) = 0.0000", "y(t) = 0.0000"]
+    assert complex_series(terms, fmt="latex") == "z(t) &= 0"

@@ -43,7 +43,7 @@ def test_seek_and_reset():
 
 def test_tip_matches_reconstruction_at_nodes():
     z, spec, c = make("Звезда")
-    c.max_vectors = None
+    c.max_epicycles = None
     n = len(c.path)
     for j in (0, 1, 100, 255, 511):
         c.seek(j / n)
@@ -52,10 +52,10 @@ def test_tip_matches_reconstruction_at_nodes():
 
 
 def test_frame_structure_and_trail():
-    _, _, c = make(max_vectors=20)
+    _, _, c = make(max_epicycles=20)
     c.seek(0.3)
     f = c.frame()
-    assert len(f.joints) == len(f.radii) + 1 == 21
+    assert len(f.joints) == len(f.radii) + 1 == 22          # центр k=0 + 20 вращающихся
     assert f.trail[-1] == f.joints[-1]
     assert len(f.trail) == c.path_samples + 1       # trail_fraction = 1
     c.trail_fraction = 0.1
@@ -65,7 +65,7 @@ def test_frame_structure_and_trail():
 
 
 def test_trail_precedes_tip_forward_and_backward():
-    _, _, c = make(max_vectors=None, trail_fraction=0.05)
+    _, _, c = make(max_epicycles=None, trail_fraction=0.05)
     c.seek(0.5)
     fwd = c.frame().trail
     assert np.isclose(fwd[-2], c.path[int(0.5 * c.path_samples)])
@@ -75,7 +75,7 @@ def test_trail_precedes_tip_forward_and_backward():
 
 
 def test_edit_sync_after_refresh():
-    z, spec, c = make("Окружность", max_vectors=None)
+    z, spec, c = make("Окружность", max_epicycles=None)
     before = c.path.copy()
     spec.set_coeff(1, spec.edited[spec.index_of(1)] * 2)   # правка коэффициента
     assert np.allclose(c.path, before)                      # кэш пока старый
@@ -87,13 +87,31 @@ def test_edit_sync_after_refresh():
     assert 1 not in c.chain.freqs
 
 
-def test_max_vectors_limits_chain():
-    _, _, c = make("Сердце", max_vectors=5)
-    assert len(c.chain.freqs) == 5 and c.chain.freqs[0] == 0
-    c.max_vectors = 40
-    assert len(c.chain.freqs) == 40
+def test_max_epicycles_limits_rotating_vectors():
+    _, _, c = make("Сердце", max_epicycles=5)
+    assert len(c.chain.freqs) == 6 and c.chain.freqs[0] == 0        # центр + 5 вращающихся
+    assert np.count_nonzero(c.chain.freqs) == 5
+    c.max_epicycles = 40
+    assert np.count_nonzero(c.chain.freqs) == 40
     with pytest.raises(ValueError):
-        c.max_vectors = 0
+        c.max_epicycles = -1
+
+
+def test_zero_epicycles_is_center_only_and_bounds():
+    z, spec, c = make("Сердце", max_epicycles=0)
+    assert list(c.chain.freqs) == [0]
+    f = c.frame()
+    c.seek(0.37)
+    assert abs(c.frame().joints[-1] - spec.edited[spec.index_of(0)]) < 1e-12   # точка не движется
+    assert np.allclose(c.path, c.path[0])
+    c.max_epicycles = 1024                                  # верхний предел интерфейса
+    assert np.count_nonzero(c.chain.freqs) == spec.n - 1    # ограничено числом гармоник (511)
+    spec.set_enabled(0, False)                              # центр отключён + 0 эпициклов → пусто
+    c.max_epicycles = 0
+    assert len(c.chain.freqs) == 0
+    fr = c.frame()
+    assert len(fr.joints) == 1 and fr.joints[0] == 0 and np.all(c.path == 0)
+    c.play(); c.advance(0.1); c.frame()                     # анимация пустой цепочки не падает
 
 
 def test_no_fft_during_animation(monkeypatch=None):
@@ -115,7 +133,7 @@ def test_no_fft_during_animation(monkeypatch=None):
 
 def test_frame_is_fast_for_many_vectors():
     import time
-    _, _, c = make("Сердце", max_vectors=None)
+    _, _, c = make("Сердце", max_epicycles=None)
     c.play()
     t = time.perf_counter()
     for _ in range(200):
