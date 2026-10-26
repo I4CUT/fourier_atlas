@@ -74,6 +74,11 @@ class Spectrum:
     def phases(self) -> np.ndarray:
         return np.angle(self.edited)
 
+    def copy(self) -> "Spectrum":
+        """Независимая копия (для фонового экспорта: поток не трогает живой спектр)."""
+        return Spectrum(self.freqs.copy(), self.original.copy(),
+                        self.edited.copy(), self.enabled.copy())
+
     # --- история правок ---
     def snapshot(self):
         return self.edited.copy(), self.enabled.copy()
